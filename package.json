@@ -1,0 +1,24 @@
+{
+  "name": "micebuild",
+  "version": "1.0.0",
+  "description": "",
+  "main": "./dist/builder.js",
+  "bin": {
+    "micebuild": "./dist/main.js"
+  },
+  "scripts": {
+    "start": "dist/main.js",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "webninjasi",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "@types/node": "^18.11.18",
+    "fengari": "^0.1.4",
+    "luaparse": "^0.3.1"
+  }
+}
