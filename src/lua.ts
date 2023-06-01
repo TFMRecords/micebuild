@@ -6,6 +6,8 @@ import {
   lualib
 } from "fengari";
 
+import tfmapi from "./tfmapi";
+
 interface RequireFunction {
   (fileName: string): {
     name: string,
@@ -40,9 +42,32 @@ export function execute(preload: string[], require: RequireFunction) {
     return 1;
   });
 
+  // Load tfm api
+  let apiStatus = lauxlib.luaL_loadbuffer(L, to_luastring(tfmapi()), null, "tfmapi");
+
+  // Show tfmapi script errors
+  if (apiStatus !== lua.LUA_OK) {
+    const message = lua.lua_tostring(L, -1);
+    console.debug("tfmapi", to_errortype(apiStatus), message && to_jsstring(message));
+    throw new Error("tfmapi error");
+  }
+
+  apiStatus = lua.lua_pcall(L, 0, 0, 0);
+  if (apiStatus !== lua.LUA_OK) {
+    const message = lua.lua_tostring(L, -1);
+    console.debug("tfmapi-runtime", to_errortype(apiStatus), message && to_jsstring(message));
+  }
+
+  const libraries = {};
 
   function loadFile(fileName: string) {
     const { content, name } = require(fileName);
+
+    if (libraries[name]) {
+      libraries[name](L);
+      return;
+    }
+
     const code = to_luastring(content);
     const chunkName = to_luastring(name + ".lua");
 
@@ -52,7 +77,11 @@ export function execute(preload: string[], require: RequireFunction) {
     let runtimeStatus;
 
     if (parseStatus === lua.LUA_OK) {
-      runtimeStatus = lua.lua_pcall(L, 0, 0, null);
+      runtimeStatus = lua.lua_pcall(L, 0, lua.LUA_MULTRET, 0);
+
+      if (runtimeStatus === lua.LUA_OK) {
+        libraries[name] = lua.lua_toproxy(L, -1);
+      }
     }
 
     const message = lua.lua_tostring(L, -1);
