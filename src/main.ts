@@ -15,7 +15,15 @@ const LocalFS : SourceFS = {
       throw new Error("Invalid require path: " + name);
     }
 
-    const content = fs.readFileSync(name + ".lua");
+    let filepath = name;
+
+    if (fs.existsSync(filepath) && fs.lstatSync(filepath).isDirectory()) {
+      filepath = path.join(filepath, "init.lua");
+    } else {
+      filepath += ".lua";
+    }
+
+    const content = fs.readFileSync(filepath);
 
     return {
       name: name,
