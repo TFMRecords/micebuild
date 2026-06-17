@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'preact/hooks';
+import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import { BaseOutputTemplate, Builder, SourceFS } from '../lib';
 
 const formatSize = (bytes: number) => {
@@ -8,6 +8,36 @@ const formatSize = (bytes: number) => {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
+
+// Traverse once to collect file handles (not file contents)
+async function collectHandles(dirHandle: any): Promise<Record<string, any>> {
+  const handles: Record<string, any> = {};
+  async function traverse(handle: any, currentPath = '') {
+    for await (const entry of handle.values()) {
+      const relativePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+      if (entry.kind === 'file') {
+        if (entry.name.endsWith('.lua')) {
+          handles[relativePath] = entry;
+        }
+      } else if (entry.kind === 'directory') {
+        await traverse(entry, relativePath);
+      }
+    }
+  }
+  await traverse(dirHandle);
+  return handles;
+}
+
+// Re-read fresh content from already-known handles (no re-traversal)
+async function readFreshFiles(handles: Record<string, any>): Promise<Record<string, { content: string, size: number }>> {
+  const result: Record<string, { content: string, size: number }> = {};
+  await Promise.all(Object.entries(handles).map(async ([path, handle]) => {
+    const file = await handle.getFile();
+    const text = await file.text();
+    result[path] = { content: text, size: file.size };
+  }));
+  return result;
+}
 
 const App = () => {
   const [filesMap, setFilesMap] = useState<Record<string, { content: string, size: number }>>({});
@@ -19,6 +49,9 @@ const App = () => {
   const [parseRequires, setParseRequires] = useState<boolean>(true);
   const [haltOnError, setHaltOnError] = useState<boolean>(true);
   const [toast, setToast] = useState<string>('');
+
+  const dirHandleRef = useRef<any>(null);
+  const fileHandlesRef = useRef<Record<string, any>>({});
 
   const toastTimeoutRef = useRef<any>(null);
 
@@ -43,25 +76,12 @@ const App = () => {
   const selectDirectory = async () => {
     try {
       const handle = await (window as any).showDirectoryPicker();
+      dirHandleRef.current = handle;
       setDirName(handle.name);
-      const loadedFiles: Record<string, { content: string, size: number }> = {};
-
-      async function traverse(dirHandle: any, currentPath = '') {
-        for await (const entry of dirHandle.values()) {
-          const relativePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-          if (entry.kind === 'file') {
-            if (entry.name.endsWith('.lua')) {
-              const file = await entry.getFile();
-              const text = await file.text();
-              loadedFiles[relativePath] = { content: text, size: file.size };
-            }
-          } else if (entry.kind === 'directory') {
-            await traverse(entry, relativePath);
-          }
-        }
-      }
-
-      await traverse(handle);
+      // Traverse once to collect handles, then read initial content
+      const handles = await collectHandles(handle);
+      fileHandlesRef.current = handles;
+      const loadedFiles = await readFreshFiles(handles);
       setFilesMap(loadedFiles);
       setBuildStatus('idle');
       setOutput('');
@@ -75,16 +95,25 @@ const App = () => {
     }
   };
 
-  const buildProject = () => {
-    const fileCount = Object.keys(filesMap).length;
-    if (fileCount === 0) {
+  const buildProject = async () => {
+    if (!dirHandleRef.current) {
       setErrorMessage('Please select a directory containing .lua files first.');
       setBuildStatus('error');
       return;
     }
 
-    // Check if init.lua exists in filesMap
-    if (!filesMap['init.lua']) {
+    // Re-read fresh content from stored handles (no directory re-traversal)
+    let freshFiles: Record<string, { content: string, size: number }>;
+    try {
+      freshFiles = await readFreshFiles(fileHandlesRef.current);
+    } catch (err: any) {
+      setErrorMessage('Failed to read files: ' + (err.message || err));
+      setBuildStatus('error');
+      return;
+    }
+    setFilesMap(freshFiles);
+
+    if (!freshFiles['init.lua']) {
       setErrorMessage('Error: init.lua not found in the loaded folder. Please select a valid project root directory.');
       setBuildStatus('error');
       return;
@@ -102,10 +131,10 @@ const App = () => {
             name + '/init.lua'
           ];
           for (const cand of candidates) {
-            if (filesMap[cand]) {
+            if (freshFiles[cand]) {
               return {
                 name: name,
-                content: filesMap[cand].content,
+                content: freshFiles[cand].content,
               };
             }
           }
