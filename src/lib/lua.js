@@ -8,13 +8,6 @@ import {
 
 import tfmapi from "./tfmapi";
 
-interface RequireFunction {
-  (fileName: string): {
-    name: string,
-    content: string,
-  };
-}
-
 const thread_status = {
   LUA_OK:        0,
   LUA_YIELD:     1,
@@ -25,11 +18,11 @@ const thread_status = {
   LUA_ERRERR:    6
 };
 
-function to_errortype(code: number) {
+function to_errortype(code) {
   return Object.keys(thread_status).filter(error => thread_status[error] == code)[0] || code;
 }
 
-export function execute(preload: string[], require: RequireFunction) {
+export function execute(preload, require) {
   // New lua state
   const L = lauxlib.luaL_newstate();
 
@@ -60,7 +53,7 @@ export function execute(preload: string[], require: RequireFunction) {
 
   const libraries = {};
 
-  function loadFile(fileName: string) {
+  function loadFile(fileName) {
     const { content, name } = require(fileName);
 
     if (libraries[name]) {
@@ -94,7 +87,7 @@ export function execute(preload: string[], require: RequireFunction) {
   }
 
   // Files loaded through require
-  const loadedFiles = new Set<string>();
+  const loadedFiles = new Set();
 
   // New require function
   lua.lua_pushjsfunction(L, (L) => {

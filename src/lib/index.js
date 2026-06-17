@@ -1,40 +1,22 @@
 import { execute } from "./lua";
+import { findGlobalRequires } from "./parse";
 
-export interface SourceFile {
-  name: string;
-  content: string;
-}
-
-export interface SourceFS {
-  preload(): string[];
-  get(name: string): SourceFile | null;
-}
-
-export interface BuilderArgs {
-  preload: string[];
-  modules: SourceFile[];
-}
-
-export interface IOutputBuilder {
-  (params: BuilderArgs): string;
-}
-
-function ModuleCodeTemplate(module: SourceFile) {
+function ModuleCodeTemplate(module) {
   return `
 ["${module.name}"]=(function(require)
 ${module.content}
 end)`;
 }
 
-function ModuleListTemplate(modules: SourceFile[]) {
+function ModuleListTemplate(modules) {
   return modules.map(module => ModuleCodeTemplate(module)).join(",");
 }
 
-function PreloadTemplate(preload: string[]) {
+function PreloadTemplate(preload) {
   return preload.map(module => `"${module}"`).join(',');
 }
 
-export const BaseOutputTemplate: IOutputBuilder = function(params: BuilderArgs) {
+export function BaseOutputTemplate(params) {
   return `local modules = {${ModuleListTemplate(params.modules)}}
 local preload = {${PreloadTemplate(params.preload)}}
 local cache = {}
@@ -55,12 +37,17 @@ require(preload[i])
 end`.trim();
 }
 
-export function Builder(fs: SourceFS, tpl: IOutputBuilder) {
+export function Builder(fs, tpl, parseRequires) {
   return () => {
     const preload = fs.preload();
     const files = execute(preload, (filename) => {
       return fs.get(filename);
     });
+
+    if (parseRequires) {
+      const newFiles = files.reduce((ret, file) => [...ret, ...findGlobalRequires(fs.get(file))], []); // TODO
+    }
+
     const modules = files.map(file => fs.get(file));
     const result = tpl({
       modules,

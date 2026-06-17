@@ -3,7 +3,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { BaseOutputTemplate, Builder, SourceFS } from './builder';
+import { BaseOutputTemplate, Builder, SourceFS } from '../lib';
 
 const LocalFS : SourceFS = {
   preload() {

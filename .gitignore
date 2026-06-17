@@ -1,2 +1,4 @@
 node_modules/
 dist/
+
+tests/example/_build.lua

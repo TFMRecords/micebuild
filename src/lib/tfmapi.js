@@ -211,8 +211,20 @@ export default function() {
       setLuaEventBanner = emptyFunction,
     },
 
+    ui = {
+      addPopup = emptyFunction,
+      removeTextArea = emptyFunction,
+      setBackgroundColor = emptyFunction,
+      setMapName = emptyFunction,
+      setShamanName = emptyFunction,
+      showColorPicker = emptyFunction,
+      addTextArea = emptyFunction,
+      updateTextArea = emptyFunction,
+    },
+
     tfm = {
       exec = {
+        bindKeyboard = emptyFunction,
         addImage = emptyFunction,
         chatMessage = emptyFunction,
         getPlayerSync = emptyFunction,
@@ -276,17 +288,6 @@ export default function() {
         setWorldGravity = emptyFunction,
         snow = emptyFunction,
         stopMusic = emptyFunction,
-      },
-
-      ui = {
-        addPopup = emptyFunction,
-        removeTextArea = emptyFunction,
-        setBackgroundColor = emptyFunction,
-        setMapName = emptyFunction,
-        setShamanName = emptyFunction,
-        showColorPicker = emptyFunction,
-        addTextArea = emptyFunction,
-        updateTextArea = emptyFunction,
       },
 
       enum = {
