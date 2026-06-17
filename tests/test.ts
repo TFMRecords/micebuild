@@ -32,7 +32,15 @@ const LocalFS : SourceFS = {
   }
 }
 
-const builder = Builder(LocalFS, BaseOutputTemplate);
+const builder = Builder(LocalFS, BaseOutputTemplate, true);
 const code = builder();
 
 fs.writeFileSync("_build.lua", code);
+
+console.log("\n--- Verification Assertions ---");
+if (code.includes('["lays/string/splitChar"]')) {
+  console.log("SUCCESS: require via luaparser is working!");
+} else {
+  console.error("FAILURE: require via luaparser is NOT working!");
+  process.exit(1);
+}

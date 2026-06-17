@@ -45,10 +45,25 @@ export function Builder(fs, tpl, parseRequires) {
     });
 
     if (parseRequires) {
-      const newFiles = files.reduce((ret, file) => [...ret, ...findGlobalRequires(fs.get(file))], []); // TODO
+      const visited = new Set(files);
+      const queue = [...files];
+      while (queue.length > 0) {
+        const file = queue.shift();
+        const sourceFile = fs.get(file);
+        if (sourceFile && sourceFile.content) {
+          const requires = findGlobalRequires(sourceFile.content);
+          for (const req of requires) {
+            if (req && typeof req === 'string' && !visited.has(req)) {
+              visited.add(req);
+              queue.push(req);
+              files.push(req);
+            }
+          }
+        }
+      }
     }
 
-    const modules = files.map(file => fs.get(file));
+    const modules = files.map(file => fs.get(file)).filter(Boolean);
     const result = tpl({
       modules,
       preload: preload
