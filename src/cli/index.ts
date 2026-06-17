@@ -32,7 +32,16 @@ const LocalFS : SourceFS = {
   }
 }
 
-const builder = Builder(LocalFS, BaseOutputTemplate);
-const code = builder();
+const haltOnError = !process.argv.includes('--no-halt') && !process.argv.includes('--halt=false');
+const parseRequires = process.argv.includes('--parse-requires') || process.argv.includes('--static-requires');
 
-fs.writeFileSync("_build.lua", code);
+const builder = Builder(LocalFS, BaseOutputTemplate, parseRequires, haltOnError);
+
+try {
+  const code = builder();
+  fs.writeFileSync("_build.lua", code);
+} catch (err: any) {
+  console.error("\n--- Build Error ---");
+  console.error(err.message || err);
+  process.exit(1);
+}

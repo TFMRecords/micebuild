@@ -7,6 +7,7 @@ import {
 } from "fengari";
 
 import tfmapi from "./tfmapi";
+import { findGlobalRequires } from "./parse";
 
 const thread_status = {
   LUA_OK:        0,
@@ -22,7 +23,7 @@ function to_errortype(code) {
   return Object.keys(thread_status).filter(error => thread_status[error] == code)[0] || code;
 }
 
-export function execute(preload, require) {
+export function execute(preload, require, parseRequires, haltOnError = true) {
   // New lua state
   const L = lauxlib.luaL_newstate();
 
@@ -54,7 +55,18 @@ export function execute(preload, require) {
   const libraries = {};
 
   function loadFile(fileName) {
-    const { content, name } = require(fileName);
+    const fileResult = require(fileName);
+    if (!fileResult) {
+      if (haltOnError) {
+        throw new Error(`File not found: ${fileName}`);
+      }
+      return {
+        parseStatus: "LUA_ERRERR",
+        runtimeStatus: "LUA_ERRERR",
+        errorMessage: `File not found: ${fileName}`
+      };
+    }
+    const { content, name } = fileResult;
 
     if (libraries[name]) {
       libraries[name](L);
@@ -78,11 +90,21 @@ export function execute(preload, require) {
     }
 
     const message = lua.lua_tostring(L, -1);
+    const errMessage = message && to_jsstring(message);
+
+    if (haltOnError) {
+      if (parseStatus !== lua.LUA_OK) {
+        throw new Error(`Syntax error in ${name}.lua:\n${errMessage}`);
+      }
+      if (runtimeStatus !== lua.LUA_OK) {
+        throw new Error(`Runtime error in ${name}.lua:\n${errMessage}`);
+      }
+    }
 
     return {
       parseStatus: to_errortype(parseStatus),
       runtimeStatus: to_errortype(runtimeStatus),
-      errorMessage: message && to_jsstring(message),
+      errorMessage: errMessage,
     };
   }
 
@@ -105,13 +127,30 @@ export function execute(preload, require) {
   lua.lua_settop(L, 0);
 
   // Load preload list
-  const result = preload.map(loadFile);
+  preload.forEach(loadFile);
+
+  // If static analysis is enabled, load statically resolved requires recursively
+  if (parseRequires) {
+    const queue = [...loadedFiles];
+    while (queue.length > 0) {
+      const file = queue.shift();
+      const fileResult = require(file);
+      if (fileResult && fileResult.content) {
+        const requires = findGlobalRequires(fileResult.content);
+        for (const req of requires) {
+          if (req && typeof req === 'string' && !loadedFiles.has(req)) {
+            loadFile(req);
+            queue.push(req);
+          }
+        }
+      }
+    }
+  }
 
   // Close lua state
   lua.lua_close(L);
 
   // Debug
-  console.debug(result);
   console.debug("loadedFiles:", loadedFiles);
 
   return [...loadedFiles];

@@ -37,31 +37,12 @@ require(preload[i])
 end`.trim();
 }
 
-export function Builder(fs, tpl, parseRequires) {
+export function Builder(fs, tpl, parseRequires, haltOnError = true) {
   return () => {
     const preload = fs.preload();
     const files = execute(preload, (filename) => {
       return fs.get(filename);
-    });
-
-    if (parseRequires) {
-      const visited = new Set(files);
-      const queue = [...files];
-      while (queue.length > 0) {
-        const file = queue.shift();
-        const sourceFile = fs.get(file);
-        if (sourceFile && sourceFile.content) {
-          const requires = findGlobalRequires(sourceFile.content);
-          for (const req of requires) {
-            if (req && typeof req === 'string' && !visited.has(req)) {
-              visited.add(req);
-              queue.push(req);
-              files.push(req);
-            }
-          }
-        }
-      }
-    }
+    }, parseRequires, haltOnError);
 
     const modules = files.map(file => fs.get(file)).filter(Boolean);
     const result = tpl({
