@@ -184,6 +184,8 @@ export default function() {
       pack = table.pack,
       sort = table.sort,
       unpack = table.unpack,
+      insert = table.insert,
+      remove = table.remove,
     },
 
     debug = {
@@ -288,6 +290,9 @@ export default function() {
         setWorldGravity = emptyFunction,
         snow = emptyFunction,
         stopMusic = emptyFunction,
+        kickPlayer = emptyFunction,
+        setPlayerLook = emptyFunction,
+        setPlayerCollision = emptyFunction,
       },
 
       enum = {
@@ -328,6 +333,7 @@ export default function() {
           rockpaperscissors = 25,
           rockpaperscissors_1 = 26,
           rockpaperscissor_2 = 27,
+          laugh_2 = 28,
         },
         ground = {
           wood = 0,
