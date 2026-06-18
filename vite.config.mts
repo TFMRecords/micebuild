@@ -13,5 +13,6 @@ export default defineConfig({
   build: {
     outDir: 'dist/frontend',
   },
-  publicDir: 'public'
+  publicDir: 'public',
+  base: '/micebuild/',
 });
