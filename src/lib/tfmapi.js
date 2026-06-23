@@ -6,46 +6,138 @@ export default function() {
 
     local bit = {}
 
-    function bit.bnot (a)
-      return ~a & 0xFFFFFFFF
+    local powers = {}
+    local p = 1
+    for i = 0, 32 do
+      powers[i] = p
+      p = p * 2
     end
 
+    local function to32 (x)
+      x = tonumber(x) or 0
+      if x ~= x or x == math.huge or x == -math.huge then
+        return 0
+      end
+      return math.floor(x % 4294967296)
+    end
 
-    --
-    -- in all vararg functions, avoid creating 'arg' table when there are
-    -- only 2 (or less) parameters, as 2 parameters is the common case
-    --
+    local function toint (x)
+      x = tonumber(x) or 0
+      if x ~= x or x == math.huge or x == -math.huge then
+        return 0
+      end
+      return math.floor(x)
+    end
+
+    local function band2(a, b)
+      local res = 0
+      local shift = 1
+      for i = 1, 32 do
+        local a_bit = a % 2
+        local b_bit = b % 2
+        if a_bit == 1 and b_bit == 1 then
+          res = res + shift
+        end
+        a = math.floor(a / 2)
+        b = math.floor(b / 2)
+        shift = shift * 2
+      end
+      return res
+    end
+
+    local function bor2(a, b)
+      local res = 0
+      local shift = 1
+      for i = 1, 32 do
+        local a_bit = a % 2
+        local b_bit = b % 2
+        if a_bit == 1 or b_bit == 1 then
+          res = res + shift
+        end
+        a = math.floor(a / 2)
+        b = math.floor(b / 2)
+        shift = shift * 2
+      end
+      return res
+    end
+
+    local function bxor2(a, b)
+      local res = 0
+      local shift = 1
+      for i = 1, 32 do
+        local a_bit = a % 2
+        local b_bit = b % 2
+        if a_bit ~= b_bit then
+          res = res + shift
+        end
+        a = math.floor(a / 2)
+        b = math.floor(b / 2)
+        shift = shift * 2
+      end
+      return res
+    end
+
+    function bit.bnot (a)
+      return 4294967295 - to32(a)
+    end
 
     function bit.band (x, y, z, ...)
-      if not z then
-        return ((x or -1) & (y or -1)) & 0xFFFFFFFF
+      if y == nil then
+        if x == nil then
+          return 4294967295
+        else
+          return to32(x)
+        end
+      elseif z == nil then
+        return band2(to32(x), to32(y))
       else
+        local res = band2(to32(x), to32(y))
+        res = band2(res, to32(z))
         local arg = {...}
-        local res = x & y & z
-        for i = 1, #arg do res = res & arg[i] end
-        return res & 0xFFFFFFFF
+        for i = 1, #arg do
+          res = band2(res, to32(arg[i]))
+        end
+        return res
       end
     end
 
     function bit.bor (x, y, z, ...)
-      if not z then
-        return ((x or 0) | (y or 0)) & 0xFFFFFFFF
+      if y == nil then
+        if x == nil then
+          return 0
+        else
+          return to32(x)
+        end
+      elseif z == nil then
+        return bor2(to32(x), to32(y))
       else
+        local res = bor2(to32(x), to32(y))
+        res = bor2(res, to32(z))
         local arg = {...}
-        local res = x | y | z
-        for i = 1, #arg do res = res | arg[i] end
-        return res & 0xFFFFFFFF
+        for i = 1, #arg do
+          res = bor2(res, to32(arg[i]))
+        end
+        return res
       end
     end
 
     function bit.bxor (x, y, z, ...)
-      if not z then
-        return ((x or 0) ~ (y or 0)) & 0xFFFFFFFF
+      if y == nil then
+        if x == nil then
+          return 0
+        else
+          return to32(x)
+        end
+      elseif z == nil then
+        return bxor2(to32(x), to32(y))
       else
+        local res = bxor2(to32(x), to32(y))
+        res = bxor2(res, to32(z))
         local arg = {...}
-        local res = x ~ y ~ z
-        for i = 1, #arg do res = res ~ arg[i] end
-        return res & 0xFFFFFFFF
+        for i = 1, #arg do
+          res = bxor2(res, to32(arg[i]))
+        end
+        return res
       end
     end
 
@@ -54,57 +146,152 @@ export default function() {
     end
 
     function bit.lshift (a, b)
-      return ((a & 0xFFFFFFFF) << b) & 0xFFFFFFFF
+      b = toint(b)
+      if b < 0 then
+        return bit.rshift(a, -b)
+      end
+      if b >= 32 then
+        return 0
+      end
+      return math.floor(to32(a) * powers[b]) % 4294967296
     end
 
     function bit.rshift (a, b)
-      return ((a & 0xFFFFFFFF) >> b) & 0xFFFFFFFF
+      b = toint(b)
+      if b < 0 then
+        return bit.lshift(a, -b)
+      end
+      if b >= 32 then
+        return 0
+      end
+      return math.floor(to32(a) / powers[b])
     end
 
     function bit.arshift (a, b)
-      a = a & 0xFFFFFFFF
-      if b <= 0 or (a & 0x80000000) == 0 then
-        return (a >> b) & 0xFFFFFFFF
+      b = toint(b)
+      if b < 0 then
+        return bit.lshift(a, -b)
+      end
+      a = to32(a)
+      if b >= 32 then
+        if a >= 2147483648 then
+          return 4294967295
+        else
+          return 0
+        end
+      end
+      local shifted = math.floor(a / powers[b])
+      if a >= 2147483648 then
+        local fill = (powers[b] - 1) * powers[32 - b]
+        return shifted + fill
       else
-        return ((a >> b) | ~(0xFFFFFFFF >> b)) & 0xFFFFFFFF
+        return shifted
       end
     end
 
     function bit.lrotate (a ,b)
-      b = b & 31
-      a = a & 0xFFFFFFFF
-      a = (a << b) | (a >> (32 - b))
-      return a & 0xFFFFFFFF
+      b = toint(b) % 32
+      if b == 0 then
+        return to32(a)
+      end
+      a = to32(a)
+      local shifted_l = (a * powers[b]) % 4294967296
+      local shifted_r = math.floor(a / powers[32 - b])
+      return (shifted_l + shifted_r) % 4294967296
     end
 
     function bit.rrotate (a, b)
-      return bit.lrotate(a, -b)
+      return bit.lrotate(a, -toint(b))
     end
 
     local function checkfield (f, w)
-      w = w or 1
+      f = toint(f)
+      w = toint(w or 1)
       assert(f >= 0, "field cannot be negative")
       assert(w > 0, "width must be positive")
       assert(f + w <= 32, "trying to access non-existent bits")
-      return f, ~(-1 << w)
+      return f, w
     end
 
     function bit.extract (a, f, w)
-      local f, mask = checkfield(f, w)
-      return (a >> f) & mask
+      local f, w = checkfield(f, w)
+      local shifted = math.floor(to32(a) / powers[f])
+      return shifted % powers[w]
     end
 
     function bit.replace (a, v, f, w)
-      local f, mask = checkfield(f, w)
-      v = v & mask
-      a = (a & ~(mask << f)) | (v << f)
-      return a & 0xFFFFFFFF
+      local f, w = checkfield(f, w)
+      a = to32(a)
+      v = to32(v) % powers[w]
+      local low_mask = powers[f]
+      local high_mask = powers[f + w]
+      local low_part = a % low_mask
+      local high_part = math.floor(a / high_mask) * high_mask
+      return high_part + v * powers[f] + low_part
     end
 
     return bit
 
     end  --}
 
+  local function os_date(fmt, t)
+    if t ~= nil then
+      t = math.floor(t)
+    end
+    return os.date(fmt, t)
+  end
+
+  local original_format = string.format
+  local function custom_format(fmt, ...)
+    local args = {...}
+    local arg_idx = 1
+    local len = #fmt
+    local i = 1
+    while i <= len do
+      local c = string.sub(fmt, i, i)
+      if c == "%" then
+        if string.sub(fmt, i + 1, i + 1) == "%" then
+          i = i + 2
+        else
+          i = i + 1
+          while i <= len do
+            local next_c = string.sub(fmt, i, i)
+            if string.match(next_c, "[cdiouxXceEfgGqsQ]") then
+              local spec_type = next_c
+              local val = args[arg_idx]
+              if val ~= nil then
+                if string.match(spec_type, "[diouxX]") then
+                  local n = tonumber(val) or 0
+                  if n ~= n or n == math.huge or n == -math.huge then
+                    n = 0
+                  end
+                  local val32 = math.floor(n % 4294967296)
+                  if val32 >= 2147483648 then
+                    val32 = val32 - 4294967296
+                  end
+                  args[arg_idx] = math.tointeger(val32)
+                elseif spec_type == "c" then
+                  local n = tonumber(val) or 0
+                  args[arg_idx] = math.tointeger(math.floor(n))
+                end
+              end
+              arg_idx = arg_idx + 1
+              i = i + 1
+              break
+            elseif string.match(next_c, "[-+ #0%d%.]") then
+              i = i + 1
+            else
+              i = i + 1
+              break
+            end
+          end
+        end
+      else
+        i = i + 1
+      end
+    end
+    return original_format(fmt, table.unpack(args))
+  end
 
   local emptyFunction = function() end
   local bit32 = require('bit32')
@@ -155,7 +342,7 @@ export default function() {
     },
 
     os = 	{
-      date = os.date,
+      date = os_date,
       difftime = os.difftime,
       time = os.time,
     },
@@ -165,7 +352,7 @@ export default function() {
       char = string.char,
       dump = string.dump,
       find = string.find,
-      format = string.format,
+      format = custom_format,
       gmatch = string.gmatch,
       gsub = string.gsub,
       len = string.len,

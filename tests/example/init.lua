@@ -2,6 +2,7 @@ local playerTable = require("lays/playerTable")
 local commands = require("lays/commands")
 local perms = require("lays/perms")
 
+local SHA256 = require("SHA256")
 
 local TeleporterPerm = perms.new("Teleporter")
 local tpEnabled = playerTable()
