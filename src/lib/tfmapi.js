@@ -2,11 +2,12 @@ export default function() {
   return `do
 
 
+  local original_os_date = os.date
   local function os_date(fmt, t)
     if t ~= nil then
       t = math.floor(t)
     end
-    return os.date(fmt, t)
+    return original_os_date(fmt, t)
   end
 
   local original_format = string.format

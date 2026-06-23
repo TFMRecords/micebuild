@@ -26,3 +26,6 @@ end
 if 1 ~= 1 then
   local _ = require("lays/string/splitChar")
 end
+
+print(string.format("%d", 123456789))
+print(os.date("*", os.time() / 1000))
