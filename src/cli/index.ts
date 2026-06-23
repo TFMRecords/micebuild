@@ -35,7 +35,23 @@ const LocalFS : SourceFS = {
 const haltOnError = !process.argv.includes('--no-halt') && !process.argv.includes('--halt=false');
 const parseRequires = process.argv.includes('--parse-requires') || process.argv.includes('--static-requires');
 
-const builder = Builder(LocalFS, BaseOutputTemplate, parseRequires, haltOnError);
+let timeoutMs = 4000;
+const timeoutIndex = process.argv.findIndex(arg => arg.startsWith('--timeout'));
+if (timeoutIndex !== -1) {
+  const arg = process.argv[timeoutIndex];
+  if (arg.includes('=')) {
+    const val = parseInt(arg.split('=')[1], 10);
+    if (!isNaN(val)) timeoutMs = val;
+  } else {
+    const nextArg = process.argv[timeoutIndex + 1];
+    if (nextArg) {
+      const val = parseInt(nextArg, 10);
+      if (!isNaN(val)) timeoutMs = val;
+    }
+  }
+}
+
+const builder = Builder(LocalFS, BaseOutputTemplate, parseRequires, haltOnError, timeoutMs);
 
 try {
   const code = builder();

@@ -37,12 +37,12 @@ require(preload[i])
 end`.trim();
 }
 
-export function Builder(fs, tpl, parseRequires, haltOnError = true) {
+export function Builder(fs, tpl, parseRequires, haltOnError = true, timeoutMs = 4000) {
   return () => {
     const preload = fs.preload();
     const files = execute(preload, (filename) => {
       return fs.get(filename);
-    }, parseRequires, haltOnError);
+    }, parseRequires, haltOnError, timeoutMs);
 
     const modules = files.map(file => fs.get(file)).filter(Boolean);
     const result = tpl({

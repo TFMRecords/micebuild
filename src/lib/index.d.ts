@@ -25,4 +25,4 @@ export interface IOutputBuilder {
 }
 
 export function BaseOutputTemplate(params: BuilderArgs): string;
-export function Builder(fs: SourceFS, tpl: IOutputBuilder, parseRequires?: boolean, haltOnError?: boolean);
+export function Builder(fs: SourceFS, tpl: IOutputBuilder, parseRequires?: boolean, haltOnError?: boolean, timeoutMs?: number);

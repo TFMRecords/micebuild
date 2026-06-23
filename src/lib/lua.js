@@ -23,12 +23,20 @@ function to_errortype(code) {
   return Object.keys(thread_status).filter(error => thread_status[error] == code)[0] || code;
 }
 
-export function execute(preload, require, parseRequires, haltOnError = true) {
+export function execute(preload, require, parseRequires, haltOnError = true, timeoutMs = 4000) {
   // New lua state
   const L = lauxlib.luaL_newstate();
 
   // Load lua libs
   lualib.luaL_openlibs(L);
+
+  // Set timeout hook (checks elapsed time every 1000 Lua VM instructions)
+  const startTime = Date.now();
+  lua.lua_sethook(L, (L, ar) => {
+    if (Date.now() - startTime > timeoutMs) {
+      lauxlib.luaL_error(L, to_luastring("Execution timed out"));
+    }
+  }, lua.LUA_MASKCOUNT || 8, 1000);
 
   // Register JS-native bit32 preload package
   lua.lua_getglobal(L, to_luastring("package"));
@@ -230,6 +238,7 @@ export function execute(preload, require, parseRequires, haltOnError = true) {
   });
 
   // Load tfm api
+  const tfmStartTime = performance.now();
   let apiStatus = lauxlib.luaL_loadbuffer(L, to_luastring(tfmapi()), null, "tfmapi");
 
   // Show tfmapi script errors
@@ -244,6 +253,8 @@ export function execute(preload, require, parseRequires, haltOnError = true) {
     const message = lua.lua_tostring(L, -1);
     console.debug("tfmapi-runtime", to_errortype(apiStatus), message && to_jsstring(message));
   }
+  const tfmDuration = performance.now() - tfmStartTime;
+  console.log(`[micebuild] tfmapi load and execute took ${tfmDuration.toFixed(2)}ms`);
 
   const libraries = {};
 
@@ -271,6 +282,7 @@ export function execute(preload, require, parseRequires, haltOnError = true) {
 
     loadedFiles.add(name);
 
+    const fileStartTime = performance.now();
     const parseStatus = lauxlib.luaL_loadbuffer(L, code, code.length, chunkName);
     let runtimeStatus;
 
@@ -281,6 +293,8 @@ export function execute(preload, require, parseRequires, haltOnError = true) {
         libraries[name] = lua.lua_toproxy(L, -1);
       }
     }
+    const fileDuration = performance.now() - fileStartTime;
+    console.log(`[micebuild] ${name}.lua load and execute took ${fileDuration.toFixed(2)}ms`);
 
     const message = lua.lua_tostring(L, -1);
     const errMessage = message && to_jsstring(message);
