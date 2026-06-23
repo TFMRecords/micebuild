@@ -30,6 +30,199 @@ export function execute(preload, require, parseRequires, haltOnError = true) {
   // Load lua libs
   lualib.luaL_openlibs(L);
 
+  // Register JS-native bit32 preload package
+  lua.lua_getglobal(L, to_luastring("package"));
+  lua.lua_getfield(L, -1, to_luastring("preload"));
+
+  lua.lua_pushjsfunction(L, (L) => {
+    lua.lua_newtable(L);
+
+    const to32 = (L, idx) => {
+      return lua.lua_tonumber(L, idx) | 0;
+    };
+
+    const reg = (name, fn) => {
+      lua.lua_pushjsfunction(L, fn);
+      lua.lua_setfield(L, -2, to_luastring(name));
+    };
+
+    reg("bnot", (L) => {
+      const a = to32(L, 1);
+      lua.lua_pushnumber(L, (~a) >>> 0);
+      return 1;
+    });
+
+    reg("band", (L) => {
+      const n = lua.lua_gettop(L);
+      if (n === 0) {
+        lua.lua_pushnumber(L, 4294967295);
+        return 1;
+      }
+      let res = to32(L, 1);
+      for (let i = 2; i <= n; i++) {
+        res = res & to32(L, i);
+      }
+      lua.lua_pushnumber(L, res >>> 0);
+      return 1;
+    });
+
+    reg("bor", (L) => {
+      const n = lua.lua_gettop(L);
+      if (n === 0) {
+        lua.lua_pushnumber(L, 0);
+        return 1;
+      }
+      let res = to32(L, 1);
+      for (let i = 2; i <= n; i++) {
+        res = res | to32(L, i);
+      }
+      lua.lua_pushnumber(L, res >>> 0);
+      return 1;
+    });
+
+    reg("bxor", (L) => {
+      const n = lua.lua_gettop(L);
+      if (n === 0) {
+        lua.lua_pushnumber(L, 0);
+        return 1;
+      }
+      let res = to32(L, 1);
+      for (let i = 2; i <= n; i++) {
+        res = res ^ to32(L, i);
+      }
+      lua.lua_pushnumber(L, res >>> 0);
+      return 1;
+    });
+
+    reg("btest", (L) => {
+      const n = lua.lua_gettop(L);
+      let res = -1;
+      if (n > 0) {
+        res = to32(L, 1);
+        for (let i = 2; i <= n; i++) {
+          res = res & to32(L, i);
+        }
+      }
+      lua.lua_pushboolean(L, res !== 0);
+      return 1;
+    });
+
+    reg("lshift", (L) => {
+      const a = to32(L, 1);
+      let b = lua.lua_tointeger(L, 2);
+      if (b < 0) {
+        b = -b;
+        if (b >= 32) {
+          lua.lua_pushnumber(L, 0);
+        } else {
+          lua.lua_pushnumber(L, (a >>> b) >>> 0);
+        }
+      } else if (b >= 32) {
+        lua.lua_pushnumber(L, 0);
+      } else {
+        lua.lua_pushnumber(L, (a << b) >>> 0);
+      }
+      return 1;
+    });
+
+    reg("rshift", (L) => {
+      const a = to32(L, 1);
+      let b = lua.lua_tointeger(L, 2);
+      if (b < 0) {
+        b = -b;
+        if (b >= 32) {
+          lua.lua_pushnumber(L, 0);
+        } else {
+          lua.lua_pushnumber(L, (a << b) >>> 0);
+        }
+      } else if (b >= 32) {
+        lua.lua_pushnumber(L, 0);
+      } else {
+        lua.lua_pushnumber(L, (a >>> b) >>> 0);
+      }
+      return 1;
+    });
+
+    reg("arshift", (L) => {
+      const a = to32(L, 1);
+      let b = lua.lua_tointeger(L, 2);
+      if (b < 0) {
+        b = -b;
+        if (b >= 32) {
+          lua.lua_pushnumber(L, 0);
+        } else {
+          lua.lua_pushnumber(L, (a << b) >>> 0);
+        }
+      } else if (b >= 32) {
+        if (a < 0) {
+          lua.lua_pushnumber(L, 4294967295);
+        } else {
+          lua.lua_pushnumber(L, 0);
+        }
+      } else {
+        lua.lua_pushnumber(L, (a >> b) >>> 0);
+      }
+      return 1;
+    });
+
+    reg("lrotate", (L) => {
+      const a = to32(L, 1);
+      let b = lua.lua_tointeger(L, 2) % 32;
+      if (b < 0) b += 32;
+      if (b === 0) {
+        lua.lua_pushnumber(L, a >>> 0);
+      } else {
+        const rotated = (a << b) | (a >>> (32 - b));
+        lua.lua_pushnumber(L, rotated >>> 0);
+      }
+      return 1;
+    });
+
+    reg("rrotate", (L) => {
+      const a = to32(L, 1);
+      let b = lua.lua_tointeger(L, 2) % 32;
+      if (b < 0) b += 32;
+      if (b === 0) {
+        lua.lua_pushnumber(L, a >>> 0);
+      } else {
+        const rotated = (a >>> b) | (a << (32 - b));
+        lua.lua_pushnumber(L, rotated >>> 0);
+      }
+      return 1;
+    });
+
+    reg("extract", (L) => {
+      const a = to32(L, 1);
+      const f = lua.lua_tointeger(L, 2);
+      const w = (lua.lua_gettop(L) < 3 || lua.lua_isnil(L, 3)) ? 1 : lua.lua_tointeger(L, 3);
+      if (f < 0 || w <= 0 || f + w > 32) {
+        return lauxlib.luaL_error(L, to_luastring("trying to access non-existent bits"));
+      }
+      const mask = w === 32 ? -1 : (1 << w) - 1;
+      lua.lua_pushnumber(L, ((a >>> f) & mask) >>> 0);
+      return 1;
+    });
+
+    reg("replace", (L) => {
+      const a = to32(L, 1);
+      const v = to32(L, 2);
+      const f = lua.lua_tointeger(L, 3);
+      const w = (lua.lua_gettop(L) < 4 || lua.lua_isnil(L, 4)) ? 1 : lua.lua_tointeger(L, 4);
+      if (f < 0 || w <= 0 || f + w > 32) {
+        return lauxlib.luaL_error(L, to_luastring("trying to access non-existent bits"));
+      }
+      const mask = w === 32 ? -1 : (1 << w) - 1;
+      const cleared = a & ~(mask << f);
+      const inserted = (v & mask) << f;
+      lua.lua_pushnumber(L, (cleared | inserted) >>> 0);
+      return 1;
+    });
+
+    return 1;
+  });
+  lua.lua_setfield(L, -2, to_luastring("bit32"));
+  lua.lua_pop(L, 2);
+
   // Handle js errors
   lua.lua_atnativeerror(L, L => {
     console.error("Lua native error:", lua.lua_touserdata(L, 1))
